@@ -61,7 +61,7 @@ end
 ```
 
 The LMS algorithm requires the use of several variables:
-- ```mu``` is the convergence factor (scalar), it is an algorithm-specific variable that can be withdrawn from the simulation settings using the ```variables``` function input
+- ```mu``` is the convergence factor (scalar), it is an algorithm-specific variable that can be retrieved from the simulation settings using the ```variables``` function input
 - ```X``` is a buffer containing the most recent samples of input signal (line-vector)
 - ```H``` is the impulse response of the adaptive FIR filter that is controlled by the LMS algorithm (column-vector)
 
@@ -136,5 +136,46 @@ function [Error, t] = LMS_algorithm(Input, Expected_result, ANC_start_sample, fi
 end
 ```
 
+#### Divergence detection
+Since the divergence of the algorithm is considered as a fault, the results in the case of a divergence are not workable and there is no point evaluating every sample.
+To speed up the simulation (especially when testing a lot of algorithms and variables combinations), a divergence detector is integrated in the algorithm. It allows to immediately discard the running simulation when the algorithm diverges, and proceed to the next simulation as soon as possible.
 
+This divergence detector is implemented as follows:
+
+```Matlab
+function [Error, t] = LMS_algorithm(Input, Expected_result, ANC_start_sample, filter_length, variables)
+    mu = variables(1) ;
+    t = NaN ;
+    Error = zeros(length(Input), 1) ;
+    X = zeros(1, filter_length) ;
+    H = zeros(filter_length, 1) ;
+    tic()
+  
+    for i = 1:length(Input)
+        X = [Input(i) X(1 : filter_length-1] ;
+        Error(i) = Expected_result(i) - X*H ;
+    
+        if i >= ANC_start_sample
+            H = H + mu * Error(i) * X' ;
+        end
+        if isnan(Error(i))
+            disp('    Divergence detected')
+            return
+        end
+    end
+  
+    t = toc() ;
+    disp(['    Algorithm running time : ', num2str(t), ' s'])
+end
+```
+
+### Simulation settings
+Once the function file is ready, the declaration of the new algorithm is done in the "main.m" file, using the struct variable ```Parameters```.
+First, add a field called ```[Name]``` to this struct variable, and inside this new field ```[Name]```, then add a new field for every single algorithm-specific variable that your algorithm requires.
+In these variable-name fields, store all the tested values of variables in a line-vector.
+
+For example, the following line in "main.m" will test the previously-defined LMS_algorithm function with 3 times in a row, using 3 different values for the convergence factor ```mu```. 
+```Matlab
+Parameters.LMS.mu = [0.01, 0.1, 0.2] ;
+```
 
